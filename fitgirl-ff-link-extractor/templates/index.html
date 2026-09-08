@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitGirl Direct Link Extractor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2310b981'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
+</head>
+<body>
+    <div class="app-background">
+        <div class="glow-sphere sphere-1"></div>
+        <div class="glow-sphere sphere-2"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="navbar">
+            <div class="brand">
+                <div class="brand-badge">PRO</div>
+                <div class="brand-title">
+                    <span class="gradient-text">FitGirl</span> Extractor
+                </div>
+            </div>
+            <div class="nav-status">
+                <div class="status-indicator online"></div>
+                <span id="backendStatus">Ready</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-grid">
+            
+            <!-- Left / Top: URL Input & Control Panel -->
+            <section class="card input-card">
+                <div class="card-header">
+                    <div class="card-icon">⚡</div>
+                    <div>
+                        <h2>Target Repack URL</h2>
+                        <p class="subtitle">Paste the FitGirl game page URL or direct FuckingFast links</p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <input type="url" id="urlInput" placeholder="https://fitgirl-repacks.site/game-name/" autocomplete="off">
+                        <button id="fetchBtn" class="btn btn-primary">
+                            <span class="btn-text">Fetch Links</span>
+                            <span class="spinner hidden"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Preset Bar -->
+                <div class="quick-samples">
+                    <span class="sample-label">Examples:</span>
+                    <button class="sample-tag" data-url="https://fitgirl-repacks.site/grand-theft-auto-v/">GTA V</button>
+                    <button class="sample-tag" data-url="https://fitgirl-repacks.site/cyberpunk-2077/">Cyberpunk 2077</button>
+                    <button class="sample-tag" data-url="https://fitgirl-repacks.site/elden-ring/">Elden Ring</button>
+                </div>
+
+                <!-- Engine Settings Bar -->
+                <div class="engine-settings">
+                    <div class="setting-item">
+                        <label for="browserSelect">Browser Engine:</label>
+                        <select id="browserSelect">
+                            <option value="Auto-Detect Browser">Auto-Detect Browser</option>
+                            <option value="Google Chrome">Google Chrome</option>
+                            <option value="Microsoft Edge">Microsoft Edge</option>
+                            <option value="Brave">Brave</option>
+                            <option value="Mozilla Firefox">Mozilla Firefox</option>
+                        </select>
+                    </div>
+
+                    <div class="setting-item checkbox-setting">
+                        <label class="switch-label">
+                            <input type="checkbox" id="headlessToggle" checked>
+                            <span class="slider"></span>
+                            <span class="toggle-text">Headless Mode (Background)</span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Middle: Parts Selection Checklist -->
+            <section id="partsSection" class="card parts-card hidden">
+                <div class="card-header">
+                    <div class="card-icon">📦</div>
+                    <div class="header-details">
+                        <h2 id="gameTitle">Discovered Parts</h2>
+                        <p class="subtitle" id="partsSummary">Select the parts you want to bypass and extract</p>
+                    </div>
+                    <div class="header-actions">
+                        <button id="selectAllBtn" class="btn btn-secondary btn-sm">Select All</button>
+                        <button id="deselectAllBtn" class="btn btn-secondary btn-sm">Deselect All</button>
+                    </div>
+                </div>
+
+                <div class="parts-toolbar">
+                    <div class="filter-input-wrapper">
+                        <input type="text" id="partFilterInput" placeholder="Filter parts (e.g. part01, setup, optional)...">
+                    </div>
+                    <div class="selection-count">
+                        Selected: <span id="selectedCount">0</span> / <span id="totalPartsCount">0</span>
+                    </div>
+                </div>
+
+                <div class="parts-list-container" id="partsList">
+                    <!-- Populated dynamically via JS -->
+                </div>
+
+                <div class="parts-action-footer">
+                    <button id="startExtractBtn" class="btn btn-accent btn-lg">
+                        <span class="btn-icon">🚀</span>
+                        <span class="btn-text">Extract Direct Links</span>
+                    </button>
+                    <button id="cancelExtractBtn" class="btn btn-danger btn-lg hidden">
+                        <span class="btn-text">Stop Extraction</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Progress Card -->
+            <section id="progressSection" class="card progress-card hidden">
+                <div class="progress-info">
+                    <div class="progress-status" id="progressStatusText">Extracting links...</div>
+                    <div class="progress-percentage" id="progressPercent">0%</div>
+                </div>
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="progressBarFill"></div>
+                </div>
+
+                <!-- Live Log Terminal Toggle -->
+                <details class="console-details">
+                    <summary>Live Automation Console & Activity</summary>
+                    <div class="console-box" id="consoleOutput">
+                        <div class="console-line info">[System] Ready for automation.</div>
+                    </div>
+                </details>
+            </section>
+
+            <!-- Results Section: Extracted Links Table & Output -->
+            <section id="resultsSection" class="card results-card hidden">
+                <div class="card-header">
+                    <div class="card-icon">🔗</div>
+                    <div>
+                        <h2>Extracted Direct Links</h2>
+                        <p class="subtitle">High-speed dl.fuckingfast.co download URLs</p>
+                    </div>
+                    <div class="header-actions">
+                        <button id="copyAllBtn" class="btn btn-primary btn-sm">
+                            <span class="btn-icon">📋</span> Copy All Links
+                        </button>
+                        <button id="downloadTxtBtn" class="btn btn-secondary btn-sm">
+                            <span class="btn-icon">💾</span> Export .TXT
+                        </button>
+                        <button id="clearResultsBtn" class="btn btn-secondary btn-sm">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <div class="results-table-container">
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px">#</th>
+                                <th>File Name</th>
+                                <th>Direct Download Link</th>
+                                <th style="width: 120px">Status</th>
+                                <th style="width: 100px">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="raw-output-box">
+                    <label for="rawLinksTextArea">Raw Direct URLs (JDownloader / IDM / Aria2 compatible):</label>
+                    <textarea id="rawLinksTextArea" readonly rows="6" placeholder="Direct URLs will appear here in real-time..."></textarea>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Toast Notifications -->
+        <div id="toastContainer" class="toast-container"></div>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>FitGirl Direct Link Extractor Web UI • Fast, Automated, Adblock & Cloudflare Stealth</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
