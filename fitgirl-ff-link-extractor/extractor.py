@@ -120,7 +120,7 @@ def fetch_links_from_url(url: str):
 
 def create_selenium_driver(browser_name: str, browser_path: str, headless: bool = True):
     """
-    Creates memory-optimized browser driver configured for 512MB RAM cloud environments (Render).
+    Creates lightweight stealth browser driver.
     """
     b_name = browser_name.lower()
     is_windows = sys.platform.startswith('win')
@@ -133,7 +133,7 @@ def create_selenium_driver(browser_name: str, browser_path: str, headless: bool 
         from selenium.webdriver.firefox.options import Options
         opts = Options()
         opts.binary_location = browser_path
-        if headless and is_windows:
+        if is_windows and headless:
             opts.add_argument("-headless")
         opts.set_preference("dom.webdriver.enabled", False)
         return webdriver.Firefox(options=opts)
@@ -144,40 +144,32 @@ def create_selenium_driver(browser_name: str, browser_path: str, headless: bool 
         opts = Options()
         opts.binary_location = browser_path
         opts.add_argument(f"--user-data-dir={temp_profile}")
-        if headless:
-            if is_windows:
-                opts.add_argument("--window-position=-2500,-2500")
-            opts.add_argument("--window-size=1024,768")
+        if is_windows and headless:
+            opts.add_argument("--window-position=-2500,-2500")
+        opts.add_argument("--window-size=1280,800")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--disable-gpu")
-        opts.add_argument("--js-flags=--max-old-space-size=128")
-        opts.add_argument("--renderer-process-limit=1")
         return webdriver.Edge(options=opts)
         
     else: # Chrome / Brave / Chromium
         import undetected_chromedriver as uc
         opts = uc.ChromeOptions()
         
-        # Critical memory constraints for 512MB RAM ceiling
         opts.add_argument(f"--user-data-dir={temp_profile}")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--disable-gpu")
-        opts.add_argument("--disable-software-rasterizer")
         opts.add_argument("--disable-extensions")
-        opts.add_argument("--js-flags=--max-old-space-size=128")
-        opts.add_argument("--renderer-process-limit=1")
         opts.add_argument("--disable-background-networking")
-        opts.add_argument("--disable-sync")
         opts.add_argument("--mute-audio")
-        opts.add_argument("--window-size=1024,768")
+        opts.add_argument("--window-size=1280,800")
         
         if is_windows:
             if headless:
                 opts.add_argument("--window-position=-2500,-2500")
         else:
-            opts.add_argument("--no-zygote")
+            # On Linux (Render / Docker), Xvfb provides the virtual screen (DISPLAY=:99)
             if not os.environ.get("DISPLAY"):
                 opts.add_argument("--headless=new")
         
@@ -200,15 +192,16 @@ def create_selenium_driver(browser_name: str, browser_path: str, headless: bool 
                 )
             raise e
 
-def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 25, heartbeat_callback=None):
+def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 30, heartbeat_callback=None):
     """
-    Loads fuckingfast page, attaches htmx listener, triggers download as soon as
-    Turnstile token generates, and captures the direct download URL.
+    Loads fuckingfast page, syncs Turnstile token from both window and hidden inputs,
+    attaches htmx listeners, clicks download, and captures the direct download URL.
     """
     driver.get(link)
     
     js_setup = """
     window.directDlUrl = null;
+    
     window.open = function(u) {
         if (u && u.includes('dl.fuckingfast.co')) {
             window.directDlUrl = u;
@@ -257,7 +250,18 @@ def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 25,
         if heartbeat_callback:
             heartbeat_callback()
 
-        # Check if URL was captured
+        # 1. Sync Turnstile input value to window.turnstileToken if available
+        try:
+            driver.execute_script("""
+                let input = document.querySelector('#cf-turnstile input[name="cf-turnstile-response"]') || document.querySelector('input[name="cf-turnstile-response"]');
+                if (input && input.value) {
+                    window.turnstileToken = input.value;
+                }
+            """)
+        except Exception:
+            pass
+
+        # 2. Check if URL was captured
         try:
             captured = driver.execute_script("return window.directDlUrl || document.body.getAttribute('data-direct-url');")
             if captured and "dl.fuckingfast.co" in captured:
@@ -266,9 +270,14 @@ def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 25,
         except Exception:
             pass
 
-        # Trigger download button if token is ready or button is unlocked
+        # 3. If Turnstile widget is present, click it or click download button
         try:
             driver.execute_script("""
+                let turnstileEl = document.querySelector('#cf-turnstile iframe, #cf-turnstile, div.cf-turnstile');
+                if (turnstileEl && !window.turnstileToken) {
+                    try { turnstileEl.click(); } catch(e) {}
+                }
+                
                 let b = document.querySelector('a[hx-post]');
                 if (b && (window.turnstileToken || window.dlCleared || (b.style && b.style.opacity !== '0.5'))) {
                     b.click();

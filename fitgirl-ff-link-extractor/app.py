@@ -186,7 +186,7 @@ async def run_extraction_task(session_id: str):
                 error_msg = None
                 try:
                     direct_url = extractor.extract_direct_url_from_driver(
-                        driver, item.url, timeout_seconds=20, heartbeat_callback=heartbeat
+                        driver, item.url, timeout_seconds=30, heartbeat_callback=heartbeat
                     )
                 except Exception as e:
                     error_msg = str(e)
