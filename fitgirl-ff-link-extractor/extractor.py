@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import time
+import tempfile
 import requests
 from bs4 import BeautifulSoup
 
@@ -121,22 +122,23 @@ def fetch_links_from_url(url: str):
 def create_selenium_driver(browser_name: str, browser_path: str, headless: bool = True):
     """
     Creates browser driver configured for stealth Cloudflare Turnstile bypass.
-    On Windows desktop, uses offscreen window positioning instead of `--headless=new`
-    to pass Cloudflare Turnstile without bot detection.
+    On Linux/Render: Uses Xvfb virtual frame buffer to render genuine desktop Chrome without bot flags.
+    On Windows: Uses isolated temp profiles and off-screen window positioning.
     """
     b_name = browser_name.lower()
     is_windows = sys.platform.startswith('win')
+    
+    # Isolate profile directory to prevent collisions
+    temp_profile = os.path.join(tempfile.gettempdir(), f"fg_uc_prof_{int(time.time()*1000)}")
+    os.makedirs(temp_profile, exist_ok=True)
     
     if "firefox" in b_name:
         from selenium import webdriver
         from selenium.webdriver.firefox.options import Options
         opts = Options()
         opts.binary_location = browser_path
-        if headless:
-            if not is_windows:
-                opts.add_argument("-headless")
-            else:
-                opts.add_argument("-headless")
+        if headless and is_windows:
+            opts.add_argument("-headless")
         opts.set_preference("dom.webdriver.enabled", False)
         return webdriver.Firefox(options=opts)
         
@@ -145,42 +147,42 @@ def create_selenium_driver(browser_name: str, browser_path: str, headless: bool 
         from selenium.webdriver.edge.options import Options
         opts = Options()
         opts.binary_location = browser_path
+        opts.add_argument(f"--user-data-dir={temp_profile}")
         if headless:
             if is_windows:
-                # Off-screen stealth window: undetectable by Cloudflare
                 opts.add_argument("--window-position=-2500,-2500")
                 opts.add_argument("--window-size=1280,800")
             else:
-                opts.add_argument("--headless=new")
+                opts.add_argument("--window-size=1920,1080")
         opts.add_experimental_option("excludeSwitches", ["enable-automation"])
         opts.add_experimental_option('useAutomationExtension', False)
         opts.add_argument("--disable-blink-features=AutomationControlled")
         opts.add_argument("--no-sandbox")
+        opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--disable-gpu")
-        opts.add_argument("--window-size=1280,800")
         return webdriver.Edge(options=opts)
         
     else: # Chrome / Brave / Chromium
-        import tempfile
         import undetected_chromedriver as uc
         opts = uc.ChromeOptions()
         
-        # Isolate profile directory to prevent collisions with open Chrome windows
-        temp_profile = os.path.join(tempfile.gettempdir(), f"fitgirl_uc_{int(time.time()*1000)}")
         opts.add_argument(f"--user-data-dir={temp_profile}")
-        
-        if headless:
-            if is_windows:
-                # Undetectable stealth offscreen window on Windows
-                opts.add_argument("--window-position=-2500,-2500")
-                opts.add_argument("--window-size=1280,800")
-            else:
-                opts.add_argument("--headless=new")
-                
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--disable-gpu")
-        opts.add_argument("--window-size=1280,800")
+        
+        if is_windows:
+            if headless:
+                # Offscreen window on Windows (undetectable by Cloudflare)
+                opts.add_argument("--window-position=-2500,-2500")
+                opts.add_argument("--window-size=1280,800")
+        else:
+            # On Linux (Docker/Render/VPS), Xvfb provides the virtual screen,
+            # so we run standard GUI Chrome inside Xvfb (DISPLAY=:99)
+            opts.add_argument("--window-size=1920,1080")
+            # If no X11 display is available on Linux fallback to headless
+            if not os.environ.get("DISPLAY"):
+                opts.add_argument("--headless=new")
         
         try:
             return uc.Chrome(
@@ -201,7 +203,7 @@ def create_selenium_driver(browser_name: str, browser_path: str, headless: bool 
                 )
             raise e
 
-def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 20, heartbeat_callback=None):
+def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 35, heartbeat_callback=None):
     """
     Loads fuckingfast page, injects adblock & interceptors, clicks the download button
     as soon as Turnstile solves, and captures the direct download URL.
@@ -250,14 +252,21 @@ def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 20,
     
     js_click = """
     let btn = document.querySelector('a[hx-post]');
-    if (btn && (window.turnstileToken || window.dlCleared || (btn.style && btn.style.opacity !== '0.5'))) {
-        btn.click();
+    if (btn) {
+        if (window.turnstileToken || window.dlCleared || (btn.style && btn.style.opacity !== '0.5')) {
+            btn.click();
+            return 'clicked';
+        }
+        return 'waiting_token';
     }
-    return document.body.getAttribute('data-direct-url');
+    return 'btn_not_found';
     """
     
     driver.get(link)
-    driver.execute_script(js_inject)
+    try:
+        driver.execute_script(js_inject)
+    except Exception:
+        pass
     
     start_time = time.time()
     while (time.time() - start_time) < timeout_seconds:
@@ -267,23 +276,28 @@ def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 20,
             heartbeat_callback()
 
         # Check intercepted URL or trigger click
-        result = driver.execute_script(js_click)
-        if result and "dl.fuckingfast.co" in result:
-            return result
-            
-        # Fallback 1: Direct link attribute in body
-        attr_val = driver.execute_script("return document.body.getAttribute('data-direct-url');")
-        if attr_val and "dl.fuckingfast.co" in attr_val:
-            return attr_val
+        try:
+            driver.execute_script(js_click)
+            attr_val = driver.execute_script("return document.body.getAttribute('data-direct-url');")
+            if attr_val and "dl.fuckingfast.co" in attr_val:
+                return attr_val
+        except Exception:
+            pass
 
-        # Fallback 2: Current browser navigation URL
-        if "dl.fuckingfast.co" in driver.current_url:
-            return driver.current_url
+        # Fallback 1: Current browser navigation URL
+        try:
+            if "dl.fuckingfast.co" in driver.current_url:
+                return driver.current_url
+        except Exception:
+            pass
             
-        # Fallback 3: Search page source
-        src = driver.page_source
-        match = re.search(r'https?://dl\.fuckingfast\.co/[^\s\'"<>]+', src)
-        if match:
-            return match.group(0)
+        # Fallback 2: Search page source
+        try:
+            src = driver.page_source
+            match = re.search(r'https?://dl\.fuckingfast\.co/[^\s\'"<>]+', src)
+            if match:
+                return match.group(0)
+        except Exception:
+            pass
 
     return None
