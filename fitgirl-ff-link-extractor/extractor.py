@@ -3,6 +3,7 @@ import sys
 import re
 import time
 import tempfile
+import gc
 import requests
 from bs4 import BeautifulSoup
 
@@ -119,9 +120,7 @@ def fetch_links_from_url(url: str):
 
 def create_selenium_driver(browser_name: str, browser_path: str, headless: bool = True):
     """
-    Creates browser driver configured for stealth Cloudflare Turnstile bypass.
-    On Linux/Render: Uses Xvfb virtual frame buffer (DISPLAY=:99) so Chrome renders with real display.
-    On Windows: Uses isolated temp profiles and offscreen placement when headless.
+    Creates memory-optimized browser driver configured for 512MB RAM cloud environments (Render).
     """
     b_name = browser_name.lower()
     is_windows = sys.platform.startswith('win')
@@ -148,32 +147,37 @@ def create_selenium_driver(browser_name: str, browser_path: str, headless: bool 
         if headless:
             if is_windows:
                 opts.add_argument("--window-position=-2500,-2500")
-                opts.add_argument("--window-size=1280,800")
-            else:
-                opts.add_argument("--window-size=1920,1080")
-        opts.add_experimental_option("excludeSwitches", ["enable-automation"])
-        opts.add_experimental_option('useAutomationExtension', False)
-        opts.add_argument("--disable-blink-features=AutomationControlled")
+            opts.add_argument("--window-size=1024,768")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--disable-gpu")
+        opts.add_argument("--js-flags=--max-old-space-size=128")
+        opts.add_argument("--renderer-process-limit=1")
         return webdriver.Edge(options=opts)
         
     else: # Chrome / Brave / Chromium
         import undetected_chromedriver as uc
         opts = uc.ChromeOptions()
         
+        # Critical memory constraints for 512MB RAM ceiling
         opts.add_argument(f"--user-data-dir={temp_profile}")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--disable-gpu")
+        opts.add_argument("--disable-software-rasterizer")
+        opts.add_argument("--disable-extensions")
+        opts.add_argument("--js-flags=--max-old-space-size=128")
+        opts.add_argument("--renderer-process-limit=1")
+        opts.add_argument("--disable-background-networking")
+        opts.add_argument("--disable-sync")
+        opts.add_argument("--mute-audio")
+        opts.add_argument("--window-size=1024,768")
         
         if is_windows:
             if headless:
                 opts.add_argument("--window-position=-2500,-2500")
-                opts.add_argument("--window-size=1280,800")
         else:
-            opts.add_argument("--window-size=1920,1080")
+            opts.add_argument("--no-zygote")
             if not os.environ.get("DISPLAY"):
                 opts.add_argument("--headless=new")
         
@@ -198,12 +202,11 @@ def create_selenium_driver(browser_name: str, browser_path: str, headless: bool 
 
 def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 25, heartbeat_callback=None):
     """
-    Loads fuckingfast page, attaches htmx and window listeners, triggers download as soon as
+    Loads fuckingfast page, attaches htmx listener, triggers download as soon as
     Turnstile token generates, and captures the direct download URL.
     """
     driver.get(link)
     
-    # Injects HTMX event listeners and interceptors
     js_setup = """
     window.directDlUrl = null;
     window.open = function(u) {
@@ -214,7 +217,6 @@ def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 25,
         return null;
     };
 
-    // HTMX afterRequest listener to capture direct dl URL from hx-redirect or location headers
     document.body.addEventListener('htmx:afterRequest', function(e) {
         if (e.detail && e.detail.xhr) {
             var redir = e.detail.xhr.getResponseHeader('hx-redirect') || e.detail.xhr.getResponseHeader('location');
@@ -225,7 +227,6 @@ def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 25,
         }
     });
 
-    // Native XHR interceptor
     if (!window.xhrWrapped) {
         window.xhrWrapped = true;
         var origXHR = window.XMLHttpRequest;
@@ -251,7 +252,7 @@ def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 25,
 
     start_time = time.time()
     while (time.time() - start_time) < timeout_seconds:
-        time.sleep(0.8)
+        time.sleep(0.7)
         
         if heartbeat_callback:
             heartbeat_callback()
@@ -260,6 +261,7 @@ def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 25,
         try:
             captured = driver.execute_script("return window.directDlUrl || document.body.getAttribute('data-direct-url');")
             if captured and "dl.fuckingfast.co" in captured:
+                gc.collect()
                 return captured
         except Exception:
             pass
@@ -278,6 +280,7 @@ def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 25,
         # Fallback 1: Current navigation URL
         try:
             if "dl.fuckingfast.co" in driver.current_url:
+                gc.collect()
                 return driver.current_url
         except Exception:
             pass
@@ -287,8 +290,10 @@ def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 25,
             src = driver.page_source
             match = re.search(r'https?://dl\.fuckingfast\.co/[^\s\'"<>]+', src)
             if match:
+                gc.collect()
                 return match.group(0)
         except Exception:
             pass
 
+    gc.collect()
     return None
