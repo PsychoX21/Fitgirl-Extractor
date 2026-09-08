@@ -16,7 +16,7 @@
     --danger: #ef4444;
     --danger-hover: #dc2626;
     --warning: #f59e0b;
-    --info: #3b82f6;
+    --info: #38bdf8;
     
     --text-main: #f8fafc;
     --text-muted: #94a3b8;
@@ -46,7 +46,7 @@ body {
     line-height: 1.5;
 }
 
-/* Background Glowing Ambient Spheres */
+/* Background Ambient Glow */
 .app-background {
     position: fixed;
     top: 0;
@@ -155,7 +155,7 @@ body {
     box-shadow: 0 0 10px #10b981;
 }
 
-/* Main Grid Layout */
+/* Main Grid */
 .main-grid {
     display: flex;
     flex-direction: column;
@@ -179,7 +179,7 @@ body {
     display: flex;
     align-items: center;
     gap: 14px;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
     flex-wrap: wrap;
 }
 
@@ -204,6 +204,17 @@ body {
 .subtitle {
     font-size: 0.85rem;
     color: var(--text-muted);
+}
+
+.header-details {
+    flex: 1;
+    min-width: 200px;
+}
+
+.header-stats {
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 
 /* Form & Inputs */
@@ -241,8 +252,8 @@ select:focus {
     gap: 8px;
     font-family: inherit;
     font-weight: 600;
-    font-size: 0.95rem;
-    padding: 12px 22px;
+    font-size: 0.92rem;
+    padding: 10px 18px;
     border-radius: var(--radius-md);
     border: none;
     cursor: pointer;
@@ -296,13 +307,13 @@ select:focus {
 }
 
 .btn-sm {
-    padding: 7px 14px;
-    font-size: 0.85rem;
+    padding: 6px 12px;
+    font-size: 0.82rem;
 }
 
 .btn-lg {
-    padding: 14px 32px;
-    font-size: 1.05rem;
+    padding: 12px 28px;
+    font-size: 1rem;
 }
 
 .btn:disabled {
@@ -417,43 +428,116 @@ select:focus {
     color: var(--text-muted);
 }
 
-/* Parts Selection Card */
-.parts-card .header-details {
-    flex: 1;
+/* Filter Preset Tabs */
+.filter-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 12px;
 }
 
+.tab-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tab-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-main);
+}
+
+.tab-btn.active {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.4);
+}
+
+.tab-count {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Parts Selection Toolbar */
 .parts-toolbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 16px;
+    gap: 12px;
+    margin-bottom: 14px;
     flex-wrap: wrap;
 }
 
-.filter-input-wrapper {
+.search-box {
+    position: relative;
     flex: 1;
-    min-width: 200px;
+    min-width: 260px;
+    display: flex;
+    align-items: center;
 }
 
-.selection-count {
+.search-icon {
+    position: absolute;
+    left: 12px;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    pointer-events: none;
+}
+
+.search-box input {
+    padding-left: 36px;
+    padding-right: 32px;
+    padding-top: 8px;
+    padding-bottom: 8px;
     font-size: 0.88rem;
-    color: var(--text-muted);
-    background: rgba(255, 255, 255, 0.04);
-    padding: 6px 14px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border-color);
 }
 
+.clear-search {
+    position: absolute;
+    right: 10px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 2px 6px;
+}
+
+.clear-search:hover {
+    color: var(--text-main);
+}
+
+.selection-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* Scrollable Checklist Container */
 .parts-list-container {
-    max-height: 280px;
+    max-height: 320px;
     overflow-y: auto;
     border: 1px solid var(--border-color);
-    background: rgba(10, 15, 25, 0.6);
+    background: rgba(6, 10, 18, 0.6);
     border-radius: var(--radius-md);
-    padding: 8px;
+    padding: 10px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 8px;
 }
 
@@ -461,22 +545,23 @@ select:focus {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 14px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: var(--transition);
+    user-select: none;
 }
 
 .part-item:hover {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
 }
 
 .part-item.active {
-    border-color: rgba(16, 185, 129, 0.3);
-    background: rgba(16, 185, 129, 0.05);
+    border-color: rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.07);
 }
 
 .part-item input[type="checkbox"] {
@@ -484,22 +569,75 @@ select:focus {
     width: 16px;
     height: 16px;
     cursor: pointer;
+    flex-shrink: 0;
+}
+
+.part-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .part-name {
-    font-size: 0.88rem;
+    font-size: 0.85rem;
     color: var(--text-main);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-family: 'JetBrains Mono', monospace;
+    flex: 1;
 }
 
+/* Category Badges */
+.category-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.category-setup {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.category-optional {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.category-main {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+/* Action Footer */
 .parts-action-footer {
     display: flex;
-    justify-content: flex-end;
-    gap: 12px;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
     margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+.footer-info {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+}
+
+.footer-buttons {
+    display: flex;
+    gap: 10px;
 }
 
 /* Progress Card */
@@ -542,7 +680,7 @@ select:focus {
     box-shadow: 0 0 12px var(--primary-glow);
 }
 
-/* Terminal Console Output */
+/* Console Box */
 .console-details {
     margin-top: 16px;
 }
@@ -660,13 +798,13 @@ select:focus {
     border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
-.badge-pending {
-    background: rgba(245, 158, 11, 0.15);
-    color: #fbbf24;
-    border: 1px solid rgba(245, 158, 11, 0.3);
+.badge-info {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
 }
 
-/* Raw Output Textarea */
+/* Raw Output */
 .raw-output-box {
     margin-top: 14px;
 }
@@ -729,17 +867,10 @@ textarea:focus {
 }
 
 @keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateY(12px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-/* Spinner */
 .spinner {
     width: 16px;
     height: 16px;
@@ -758,7 +889,6 @@ textarea:focus {
     display: none !important;
 }
 
-/* Footer */
 .app-footer {
     text-align: center;
     padding: 20px 0 10px;
@@ -766,7 +896,6 @@ textarea:focus {
     color: var(--text-dim);
 }
 
-/* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -796,7 +925,11 @@ textarea:focus {
         flex-direction: column;
         align-items: flex-start;
     }
-    .header-actions {
-        margin-top: 10px;
+    .parts-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .selection-actions {
+        justify-content: space-between;
     }
 }

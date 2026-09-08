@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let extractedResults = [];
     let currentSessionId = null;
     let eventSource = null;
+    let currentCategory = 'all';
 
     // DOM Elements
     const urlInput = document.getElementById('urlInput');
@@ -18,11 +19,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const partsSection = document.getElementById('partsSection');
     const gameTitle = document.getElementById('gameTitle');
     const partsList = document.getElementById('partsList');
-    const selectedCountEl = document.getElementById('selectedCount');
-    const totalPartsCountEl = document.getElementById('totalPartsCount');
-    const selectAllBtn = document.getElementById('selectAllBtn');
-    const deselectAllBtn = document.getElementById('deselectAllBtn');
+    const showingStatBadge = document.getElementById('showingStatBadge');
+    const selectedStatBadge = document.getElementById('selectedStatBadge');
+    const actionFooterSummary = document.getElementById('actionFooterSummary');
+    
+    const countAll = document.getElementById('countAll');
+    const countMain = document.getElementById('countMain');
+    const countSetup = document.getElementById('countSetup');
+    const countOptional = document.getElementById('countOptional');
+    
+    const filterTabs = document.querySelectorAll('.tab-btn');
     const partFilterInput = document.getElementById('partFilterInput');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    
+    const selectVisibleBtn = document.getElementById('selectVisibleBtn');
+    const deselectVisibleBtn = document.getElementById('deselectVisibleBtn');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
     
     const startExtractBtn = document.getElementById('startExtractBtn');
     const cancelExtractBtn = document.getElementById('cancelExtractBtn');
@@ -41,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearResultsBtn = document.getElementById('clearResultsBtn');
     const toastContainer = document.getElementById('toastContainer');
 
-    // Load available browsers on startup
+    // Init
     loadBrowsers();
 
     // Event Listeners
@@ -58,13 +71,40 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    selectAllBtn.addEventListener('click', () => setAllSelection(true));
-    deselectAllBtn.addEventListener('click', () => setAllSelection(false));
-    partFilterInput.addEventListener('input', handleFilterParts);
+    // Preset Category Tabs
+    filterTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            filterTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentCategory = tab.getAttribute('data-category');
+            applyFilters();
+        });
+    });
 
+    // Search and Clear
+    partFilterInput.addEventListener('input', () => {
+        clearSearchBtn.classList.toggle('hidden', !partFilterInput.value);
+        applyFilters();
+    });
+
+    clearSearchBtn.addEventListener('click', () => {
+        partFilterInput.value = '';
+        clearSearchBtn.classList.add('hidden');
+        applyFilters();
+        partFilterInput.focus();
+    });
+
+    // Selection Controls
+    selectVisibleBtn.addEventListener('click', () => setVisibleSelection(true));
+    deselectVisibleBtn.addEventListener('click', () => setVisibleSelection(false));
+    selectAllBtn.addEventListener('click', () => setGlobalSelection(true));
+    clearAllBtn.addEventListener('click', () => setGlobalSelection(false));
+
+    // Extraction
     startExtractBtn.addEventListener('click', handleStartExtraction);
     cancelExtractBtn.addEventListener('click', handleCancelExtraction);
 
+    // Export & Clear
     copyAllBtn.addEventListener('click', handleCopyAll);
     downloadTxtBtn.addEventListener('click', handleDownloadTxt);
     clearResultsBtn.addEventListener('click', handleClearResults);
@@ -137,14 +177,31 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderDiscoveredParts(data) {
         currentLinks = data.links || [];
         gameTitle.textContent = data.title || 'FitGirl Repack';
+        
+        // Update category counts
+        const mainCount = currentLinks.filter(l => l.category === 'main').length;
+        const setupCount = currentLinks.filter(l => l.category === 'setup').length;
+        const optionalCount = currentLinks.filter(l => l.category === 'optional').length;
+
+        countAll.textContent = currentLinks.length;
+        countMain.textContent = mainCount;
+        countSetup.textContent = setupCount;
+        countOptional.textContent = optionalCount;
+
+        // Reset filter
+        partFilterInput.value = '';
+        clearSearchBtn.classList.add('hidden');
+        filterTabs.forEach(t => t.classList.toggle('active', t.getAttribute('data-category') === 'all'));
+        currentCategory = 'all';
+
         partsSection.classList.remove('hidden');
         partsSection.scrollIntoView({ behavior: 'smooth' });
 
-        renderPartsList(currentLinks);
-        updateSelectionStats();
+        buildPartsDOM(currentLinks);
+        applyFilters();
     }
 
-    function renderPartsList(links) {
+    function buildPartsDOM(links) {
         partsList.innerHTML = '';
 
         if (links.length === 0) {
@@ -157,58 +214,108 @@ document.addEventListener('DOMContentLoaded', () => {
             item.className = 'part-item' + (link.selected ? ' active' : '');
             item.setAttribute('data-id', link.id);
             item.setAttribute('data-name', link.name.toLowerCase());
+            item.setAttribute('data-category', link.category || 'main');
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.checked = link.selected;
             checkbox.id = `part-chk-${link.id}`;
 
-            const label = document.createElement('label');
-            label.htmlFor = `part-chk-${link.id}`;
+            const details = document.createElement('div');
+            details.className = 'part-details';
+
+            const badge = document.createElement('span');
+            badge.className = `category-badge category-${link.category || 'main'}`;
+            badge.textContent = link.category || 'main';
+
+            const label = document.createElement('span');
             label.className = 'part-name';
             label.textContent = link.name;
             label.title = link.url;
 
-            checkbox.addEventListener('change', (e) => {
-                link.selected = e.target.checked;
+            details.appendChild(badge);
+            details.appendChild(label);
+
+            // Toggle on whole item click
+            item.addEventListener('click', (e) => {
+                if (e.target !== checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                }
+                link.selected = checkbox.checked;
                 item.classList.toggle('active', link.selected);
-                updateSelectionStats();
+                updateStats();
             });
 
             item.appendChild(checkbox);
-            item.appendChild(label);
+            item.appendChild(details);
             partsList.appendChild(item);
         });
     }
 
-    function setAllSelection(selected) {
-        currentLinks.forEach(link => link.selected = selected);
-        document.querySelectorAll('.part-item input[type="checkbox"]').forEach(chk => {
-            chk.checked = selected;
-            chk.closest('.part-item').classList.toggle('active', selected);
-        });
-        updateSelectionStats();
-    }
-
-    function handleFilterParts() {
+    function applyFilters() {
         const query = partFilterInput.value.trim().toLowerCase();
         const items = partsList.querySelectorAll('.part-item');
+        let visibleCount = 0;
+
         items.forEach(item => {
             const name = item.getAttribute('data-name');
-            if (!query || name.includes(query)) {
+            const category = item.getAttribute('data-category');
+
+            const matchesCategory = (currentCategory === 'all' || category === currentCategory);
+            const matchesQuery = (!query || name.includes(query));
+
+            if (matchesCategory && matchesQuery) {
                 item.style.display = 'flex';
+                visibleCount++;
             } else {
                 item.style.display = 'none';
             }
         });
+
+        showingStatBadge.textContent = `Showing ${visibleCount} of ${currentLinks.length}`;
+        updateStats();
     }
 
-    function updateSelectionStats() {
+    function setVisibleSelection(selected) {
+        const items = partsList.querySelectorAll('.part-item');
+        let affected = 0;
+
+        items.forEach(item => {
+            if (item.style.display !== 'none') {
+                const id = parseInt(item.getAttribute('data-id'));
+                const link = currentLinks.find(l => l.id === id);
+                if (link) {
+                    link.selected = selected;
+                    const chk = item.querySelector('input[type="checkbox"]');
+                    if (chk) chk.checked = selected;
+                    item.classList.toggle('active', selected);
+                    affected++;
+                }
+            }
+        });
+
+        showToast(`${selected ? 'Selected' : 'Deselected'} ${affected} visible parts`, 'info');
+        updateStats();
+    }
+
+    function setGlobalSelection(selected) {
+        currentLinks.forEach(link => link.selected = selected);
+        document.querySelectorAll('.part-item').forEach(item => {
+            const chk = item.querySelector('input[type="checkbox"]');
+            if (chk) chk.checked = selected;
+            item.classList.toggle('active', selected);
+        });
+        showToast(`${selected ? 'Selected' : 'Deselected'} all ${currentLinks.length} parts`, 'info');
+        updateStats();
+    }
+
+    function updateStats() {
         const total = currentLinks.length;
         const selected = currentLinks.filter(l => l.selected).length;
-        totalPartsCountEl.textContent = total;
-        selectedCountEl.textContent = selected;
-        startExtractBtn.disabled = selected === 0;
+        
+        selectedStatBadge.textContent = `${selected} Selected`;
+        actionFooterSummary.textContent = `${selected} of ${total} parts selected for extraction`;
+        startExtractBtn.disabled = (selected === 0);
     }
 
     async function handleStartExtraction() {
@@ -226,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsTableBody.innerHTML = '';
         rawLinksTextArea.value = '';
         consoleOutput.innerHTML = '';
-        appendLog('info', `Starting extraction job for ${selectedLinks.length} parts...`);
+        appendLog('info', `Starting stealth extraction job for ${selectedLinks.length} parts...`);
 
         // Show sections
         progressSection.classList.remove('hidden');
@@ -283,14 +390,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         eventSource.onerror = (err) => {
             console.error('SSE Error:', err);
-            appendLog('error', 'SSE Stream closed or disconnected.');
-            eventSource.close();
-            resetExtractControls();
+            // Don't panic if it's just closing on completion
+            if (currentSessionId) {
+                appendLog('info', 'SSE Stream disconnected or completed.');
+            }
         };
     }
 
     function handleStreamEvent(data) {
         switch (data.type) {
+            case 'ping':
+                // Keep-alive heartbeat
+                break;
+
             case 'log':
                 const logType = data.message.includes('✓') ? 'success' : 
                                (data.message.includes('✗') || data.message.includes('Error')) ? 'error' : 'info';
@@ -325,7 +437,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleItemResult(result) {
         extractedResults.push(result);
 
-        // Add to table
         const row = document.createElement('tr');
         const index = extractedResults.length;
 
@@ -339,9 +450,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (result.success && result.direct_url) {
             tdLink = `<td class="direct-link-cell"><a href="${result.direct_url}" target="_blank" rel="noopener noreferrer">${escapeHtml(result.direct_url)}</a></td>`;
             tdStatus = `<td><span class="badge badge-success">Extracted</span></td>`;
-            tdAction = `<td><button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${result.direct_url}'); alert('Link copied!');">Copy</button></td>`;
+            tdAction = `<td><button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${result.direct_url}'); alert('Direct link copied!');">Copy</button></td>`;
             
-            // Append to raw textarea
             if (rawLinksTextArea.value) {
                 rawLinksTextArea.value += '\n' + result.direct_url;
             } else {

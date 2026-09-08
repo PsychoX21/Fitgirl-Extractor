@@ -34,13 +34,13 @@
         <!-- Main Content -->
         <main class="main-grid">
             
-            <!-- Left / Top: URL Input & Control Panel -->
+            <!-- URL Input & Settings Card -->
             <section class="card input-card">
                 <div class="card-header">
                     <div class="card-icon">⚡</div>
                     <div>
                         <h2>Target Repack URL</h2>
-                        <p class="subtitle">Paste the FitGirl game page URL or direct FuckingFast links</p>
+                        <p class="subtitle">Paste the FitGirl game page URL or direct FuckingFast link</p>
                     </div>
                 </div>
 
@@ -54,9 +54,10 @@
                     </div>
                 </div>
 
-                <!-- Quick Preset Bar -->
+                <!-- Quick Samples -->
                 <div class="quick-samples">
-                    <span class="sample-label">Examples:</span>
+                    <span class="sample-label">Try Examples:</span>
+                    <button class="sample-tag" data-url="https://fitgirl-repacks.site/mortal-kombat-1/">Mortal Kombat 1</button>
                     <button class="sample-tag" data-url="https://fitgirl-repacks.site/grand-theft-auto-v/">GTA V</button>
                     <button class="sample-tag" data-url="https://fitgirl-repacks.site/cyberpunk-2077/">Cyberpunk 2077</button>
                     <button class="sample-tag" data-url="https://fitgirl-repacks.site/elden-ring/">Elden Ring</button>
@@ -79,47 +80,85 @@
                         <label class="switch-label">
                             <input type="checkbox" id="headlessToggle" checked>
                             <span class="slider"></span>
-                            <span class="toggle-text">Headless Mode (Background)</span>
+                            <span class="toggle-text">Headless / Stealth Mode (Invisible)</span>
                         </label>
                     </div>
                 </div>
             </section>
 
-            <!-- Middle: Parts Selection Checklist -->
+            <!-- Discovered Parts & Filter Section -->
             <section id="partsSection" class="card parts-card hidden">
-                <div class="card-header">
+                <div class="card-header parts-header">
                     <div class="card-icon">📦</div>
                     <div class="header-details">
                         <h2 id="gameTitle">Discovered Parts</h2>
-                        <p class="subtitle" id="partsSummary">Select the parts you want to bypass and extract</p>
+                        <p class="subtitle" id="partsSummary">Filter and select the exact files you want to extract</p>
                     </div>
-                    <div class="header-actions">
-                        <button id="selectAllBtn" class="btn btn-secondary btn-sm">Select All</button>
-                        <button id="deselectAllBtn" class="btn btn-secondary btn-sm">Deselect All</button>
+                    <div class="header-stats">
+                        <span class="badge badge-info" id="showingStatBadge">Showing 0 of 0</span>
+                        <span class="badge badge-success" id="selectedStatBadge">0 Selected</span>
                     </div>
                 </div>
 
+                <!-- Filter Preset Tabs -->
+                <div class="filter-tabs">
+                    <button class="tab-btn active" data-category="all">
+                        All Parts <span class="tab-count" id="countAll">0</span>
+                    </button>
+                    <button class="tab-btn" data-category="main">
+                        Main Game <span class="tab-count" id="countMain">0</span>
+                    </button>
+                    <button class="tab-btn" data-category="setup">
+                        Setup & Binaries <span class="tab-count" id="countSetup">0</span>
+                    </button>
+                    <button class="tab-btn" data-category="optional">
+                        Selective / Optional <span class="tab-count" id="countOptional">0</span>
+                    </button>
+                </div>
+
+                <!-- Filter & Selection Toolbar -->
                 <div class="parts-toolbar">
-                    <div class="filter-input-wrapper">
-                        <input type="text" id="partFilterInput" placeholder="Filter parts (e.g. part01, setup, optional)...">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="partFilterInput" placeholder="Filter visible parts by name (e.g. part01, selective, setup)...">
+                        <button id="clearSearchBtn" class="clear-search hidden">✕</button>
                     </div>
-                    <div class="selection-count">
-                        Selected: <span id="selectedCount">0</span> / <span id="totalPartsCount">0</span>
+
+                    <div class="selection-actions">
+                        <button id="selectVisibleBtn" class="btn btn-secondary btn-sm" title="Select all parts currently displayed by search filter">
+                            ✓ Select Visible
+                        </button>
+                        <button id="deselectVisibleBtn" class="btn btn-secondary btn-sm" title="Deselect all parts currently displayed by search filter">
+                            ✕ Deselect Visible
+                        </button>
+                        <button id="selectAllBtn" class="btn btn-secondary btn-sm" title="Select every part in the game">
+                            Select All
+                        </button>
+                        <button id="clearAllBtn" class="btn btn-secondary btn-sm" title="Clear all selections">
+                            Clear All
+                        </button>
                     </div>
                 </div>
 
+                <!-- Scrollable Checklist Container -->
                 <div class="parts-list-container" id="partsList">
                     <!-- Populated dynamically via JS -->
                 </div>
 
+                <!-- Action Footer -->
                 <div class="parts-action-footer">
-                    <button id="startExtractBtn" class="btn btn-accent btn-lg">
-                        <span class="btn-icon">🚀</span>
-                        <span class="btn-text">Extract Direct Links</span>
-                    </button>
-                    <button id="cancelExtractBtn" class="btn btn-danger btn-lg hidden">
-                        <span class="btn-text">Stop Extraction</span>
-                    </button>
+                    <div class="footer-info">
+                        <span id="actionFooterSummary">Ready to extract selected parts</span>
+                    </div>
+                    <div class="footer-buttons">
+                        <button id="startExtractBtn" class="btn btn-accent btn-lg">
+                            <span class="btn-icon">🚀</span>
+                            <span class="btn-text">Extract Direct Links</span>
+                        </button>
+                        <button id="cancelExtractBtn" class="btn btn-danger btn-lg hidden">
+                            <span class="btn-text">Stop Extraction</span>
+                        </button>
+                    </div>
                 </div>
             </section>
 
@@ -133,20 +172,20 @@
                     <div class="progress-bar-fill" id="progressBarFill"></div>
                 </div>
 
-                <!-- Live Log Terminal Toggle -->
-                <details class="console-details">
-                    <summary>Live Automation Console & Activity</summary>
+                <!-- Live Log Console -->
+                <details class="console-details" open>
+                    <summary>Live Automation Terminal & Activity</summary>
                     <div class="console-box" id="consoleOutput">
                         <div class="console-line info">[System] Ready for automation.</div>
                     </div>
                 </details>
             </section>
 
-            <!-- Results Section: Extracted Links Table & Output -->
+            <!-- Results Section: Extracted Direct Links -->
             <section id="resultsSection" class="card results-card hidden">
                 <div class="card-header">
                     <div class="card-icon">🔗</div>
-                    <div>
+                    <div class="header-details">
                         <h2>Extracted Direct Links</h2>
                         <p class="subtitle">High-speed dl.fuckingfast.co download URLs</p>
                     </div>
@@ -167,11 +206,11 @@
                     <table class="results-table">
                         <thead>
                             <tr>
-                                <th style="width: 60px">#</th>
+                                <th style="width: 50px">#</th>
                                 <th>File Name</th>
                                 <th>Direct Download Link</th>
-                                <th style="width: 120px">Status</th>
-                                <th style="width: 100px">Action</th>
+                                <th style="width: 110px">Status</th>
+                                <th style="width: 90px">Action</th>
                             </tr>
                         </thead>
                         <tbody id="resultsTableBody">

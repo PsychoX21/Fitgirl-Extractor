@@ -4,7 +4,7 @@ import asyncio
 import uuid
 from typing import List, Optional
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -36,6 +36,7 @@ class ExtractionItem(BaseModel):
     id: int
     url: str
     name: str
+    category: Optional[str] = "main"
 
 class StartExtractionRequest(BaseModel):
     links: List[ExtractionItem]
@@ -67,7 +68,6 @@ async def get_browsers():
 @app.post("/api/fetch")
 async def fetch_fitgirl_page(req: FetchRequest):
     try:
-        # Run blocking network call in a thread pool
         data = await asyncio.to_thread(extractor.fetch_links_from_url, req.url)
         return {"success": True, "data": data}
     except Exception as e:
@@ -88,7 +88,6 @@ async def start_extraction(req: StartExtractionRequest):
         "queue": asyncio.Queue()
     }
     
-    # Start the worker task in background
     asyncio.create_task(run_extraction_task(session_id))
     return {"success": True, "session_id": session_id}
 
@@ -125,7 +124,7 @@ async def run_extraction_task(session_id: str):
         asyncio.run_coroutine_threadsafe(
             queue.put({
                 "type": "log",
-                "message": f"Initializing stealth {browser_name} (Headless: {headless}) to bypass Cloudflare..."
+                "message": f"Initializing stealth {browser_name} (Headless: {headless})..."
             }),
             loop
         )
@@ -134,7 +133,7 @@ async def run_extraction_task(session_id: str):
         try:
             driver = extractor.create_selenium_driver(browser_name, browser_executable, headless=headless)
             
-            # Disable downloads
+            # Disable downloads globally
             if "firefox" not in browser_name.lower():
                 try:
                     driver.execute_cdp_cmd(
@@ -163,7 +162,7 @@ async def run_extraction_task(session_id: str):
                         "type": "progress",
                         "current": i,
                         "total": total,
-                        "percent": int((i / total) * 100),
+                        "percent": int(((i - 1) / total) * 100),
                         "current_item": item.name
                     }),
                     loop
@@ -172,15 +171,23 @@ async def run_extraction_task(session_id: str):
                 asyncio.run_coroutine_threadsafe(
                     queue.put({
                         "type": "log",
-                        "message": f"[{i}/{total}] Resolving direct link for: {item.name}"
+                        "message": f"[{i}/{total}] Resolving direct link: {item.name}"
                     }),
                     loop
                 )
 
+                def heartbeat():
+                    asyncio.run_coroutine_threadsafe(
+                        queue.put({"type": "ping"}),
+                        loop
+                    )
+
                 direct_url = None
                 error_msg = None
                 try:
-                    direct_url = extractor.extract_direct_url_from_driver(driver, item.url, timeout_seconds=25)
+                    direct_url = extractor.extract_direct_url_from_driver(
+                        driver, item.url, timeout_seconds=20, heartbeat_callback=heartbeat
+                    )
                 except Exception as e:
                     error_msg = str(e)
 
@@ -228,6 +235,17 @@ async def run_extraction_task(session_id: str):
 
             asyncio.run_coroutine_threadsafe(
                 queue.put({
+                    "type": "progress",
+                    "current": total,
+                    "total": total,
+                    "percent": 100,
+                    "current_item": "Done"
+                }),
+                loop
+            )
+
+            asyncio.run_coroutine_threadsafe(
+                queue.put({
                     "type": "done",
                     "total": total,
                     "successful": successful,
@@ -262,25 +280,33 @@ async def stream_extraction(session_id: str):
     async def event_generator():
         try:
             while True:
-                data = await queue.get()
+                # 15s timeout with automatic heartbeat ping
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    yield {
+                        "event": "message",
+                        "data": json.dumps({"type": "ping"})
+                    }
+                    continue
+
                 yield {
                     "event": "message",
                     "data": json.dumps(data)
                 }
                 if data.get("type") in ("done", "error"):
-                    # Clean up after completion
                     if session_id in active_sessions:
                         del active_sessions[session_id]
                     break
         except asyncio.CancelledError:
             pass
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(event_generator(), ping=10)
 
 if __name__ == "__main__":
     import uvicorn
     print("=======================================================")
-    print("  🚀 FitGirl FF Direct Link Extractor Web Server")
+    print("  🚀 FitGirl Direct Link Extractor Web Server")
     print("  🌐 Open in your browser: http://127.0.0.1:8000")
     print("=======================================================")
     uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=False)
