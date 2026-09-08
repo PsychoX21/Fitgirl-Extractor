@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  fitgirl-extractor:
+    build: .
+    container_name: fitgirl_extractor_web
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    shm_size: 2gb
+    environment:
+      - PYTHONUNBUFFERED=1
