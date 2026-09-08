@@ -306,7 +306,7 @@ async def stream_extraction(session_id: str):
 if __name__ == "__main__":
     import uvicorn
     print("=======================================================")
-    print("  🚀 FitGirl Direct Link Extractor Web Server")
-    print("  🌐 Open in your browser: http://127.0.0.1:8000")
+    print("  FitGirl Direct Link Extractor Web Server")
+    print("  Open in your browser: http://127.0.0.1:8000")
     print("=======================================================")
     uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=False)
