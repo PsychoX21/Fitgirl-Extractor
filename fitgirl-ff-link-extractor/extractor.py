@@ -62,7 +62,6 @@ def fetch_links_from_url(url: str):
     if not url:
         raise ValueError("URL cannot be empty")
         
-    # If the user directly pasted a fuckingfast.co link
     if "fuckingfast.co" in url and "fitgirl-repacks.site" not in url:
         name = url.split('#')[-1] if '#' in url else url.split('/')[-1]
         return {
@@ -96,7 +95,6 @@ def fetch_links_from_url(url: str):
             seen.add(href)
             name = href.split('#')[-1] if '#' in href else href.split('/')[-1]
             
-            # Categorize link based on filename
             name_lower = name.lower()
             if 'selective' in name_lower or 'optional' in name_lower or 'bonus' in name_lower or 'languages' in name_lower:
                 category = "optional"
@@ -122,14 +120,13 @@ def fetch_links_from_url(url: str):
 def create_selenium_driver(browser_name: str, browser_path: str, headless: bool = True):
     """
     Creates browser driver configured for stealth Cloudflare Turnstile bypass.
-    On Linux/Render: Uses Xvfb virtual frame buffer to render genuine desktop Chrome without bot flags.
-    On Windows: Uses isolated temp profiles and off-screen window positioning.
+    On Linux/Render: Uses Xvfb virtual frame buffer (DISPLAY=:99) so Chrome renders with real display.
+    On Windows: Uses isolated temp profiles and offscreen placement when headless.
     """
     b_name = browser_name.lower()
     is_windows = sys.platform.startswith('win')
     
-    # Isolate profile directory to prevent collisions
-    temp_profile = os.path.join(tempfile.gettempdir(), f"fg_uc_prof_{int(time.time()*1000)}")
+    temp_profile = os.path.join(tempfile.gettempdir(), f"fg_uc_{int(time.time()*1000)}")
     os.makedirs(temp_profile, exist_ok=True)
     
     if "firefox" in b_name:
@@ -173,14 +170,10 @@ def create_selenium_driver(browser_name: str, browser_path: str, headless: bool 
         
         if is_windows:
             if headless:
-                # Offscreen window on Windows (undetectable by Cloudflare)
                 opts.add_argument("--window-position=-2500,-2500")
                 opts.add_argument("--window-size=1280,800")
         else:
-            # On Linux (Docker/Render/VPS), Xvfb provides the virtual screen,
-            # so we run standard GUI Chrome inside Xvfb (DISPLAY=:99)
             opts.add_argument("--window-size=1920,1080")
-            # If no X11 display is available on Linux fallback to headless
             if not os.environ.get("DISPLAY"):
                 opts.add_argument("--headless=new")
         
@@ -203,71 +196,59 @@ def create_selenium_driver(browser_name: str, browser_path: str, headless: bool 
                 )
             raise e
 
-def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 35, heartbeat_callback=None):
+def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 25, heartbeat_callback=None):
     """
-    Loads fuckingfast page, injects adblock & interceptors, clicks the download button
-    as soon as Turnstile solves, and captures the direct download URL.
+    Loads fuckingfast page, attaches htmx and window listeners, triggers download as soon as
+    Turnstile token generates, and captures the direct download URL.
     """
-    js_inject = """
-    // 1. Block annoying popup ads
+    driver.get(link)
+    
+    # Injects HTMX event listeners and interceptors
+    js_setup = """
+    window.directDlUrl = null;
     window.open = function(u) {
         if (u && u.includes('dl.fuckingfast.co')) {
+            window.directDlUrl = u;
             document.body.setAttribute('data-direct-url', u);
         }
         return null;
     };
-    
-    // 2. Intercept XMLHttpRequest to catch hx-redirect or location headers
-    if (!window.xhrIntercepted) {
-        window.xhrIntercepted = true;
-        var originalXHR = window.XMLHttpRequest;
+
+    // HTMX afterRequest listener to capture direct dl URL from hx-redirect or location headers
+    document.body.addEventListener('htmx:afterRequest', function(e) {
+        if (e.detail && e.detail.xhr) {
+            var redir = e.detail.xhr.getResponseHeader('hx-redirect') || e.detail.xhr.getResponseHeader('location');
+            if (redir && redir.includes('dl.fuckingfast.co')) {
+                window.directDlUrl = redir;
+                document.body.setAttribute('data-direct-url', redir);
+            }
+        }
+    });
+
+    // Native XHR interceptor
+    if (!window.xhrWrapped) {
+        window.xhrWrapped = true;
+        var origXHR = window.XMLHttpRequest;
         window.XMLHttpRequest = function() {
-            var xhr = new originalXHR();
+            var xhr = new origXHR();
             xhr.addEventListener('readystatechange', function() {
                 if (xhr.readyState === 4) {
-                    var redirect = xhr.getResponseHeader('hx-redirect') || xhr.getResponseHeader('location');
-                    if (redirect && redirect.includes('dl.fuckingfast.co')) {
-                        document.body.setAttribute('data-direct-url', redirect);
+                    var redir = xhr.getResponseHeader('hx-redirect') || xhr.getResponseHeader('location');
+                    if (redir && redir.includes('dl.fuckingfast.co')) {
+                        window.directDlUrl = redir;
+                        document.body.setAttribute('data-direct-url', redir);
                     }
                 }
             });
             return xhr;
         };
     }
-
-    // 3. Intercept fetch API as well
-    if (!window.fetchIntercepted && window.fetch) {
-        window.fetchIntercepted = true;
-        var origFetch = window.fetch;
-        window.fetch = async function(...args) {
-            const res = await origFetch(...args);
-            const redirect = res.headers.get('hx-redirect') || res.headers.get('location');
-            if (redirect && redirect.includes('dl.fuckingfast.co')) {
-                document.body.setAttribute('data-direct-url', redirect);
-            }
-            return res;
-        };
-    }
     """
-    
-    js_click = """
-    let btn = document.querySelector('a[hx-post]');
-    if (btn) {
-        if (window.turnstileToken || window.dlCleared || (btn.style && btn.style.opacity !== '0.5')) {
-            btn.click();
-            return 'clicked';
-        }
-        return 'waiting_token';
-    }
-    return 'btn_not_found';
-    """
-    
-    driver.get(link)
     try:
-        driver.execute_script(js_inject)
+        driver.execute_script(js_setup)
     except Exception:
         pass
-    
+
     start_time = time.time()
     while (time.time() - start_time) < timeout_seconds:
         time.sleep(0.8)
@@ -275,23 +256,33 @@ def extract_direct_url_from_driver(driver, link: str, timeout_seconds: int = 35,
         if heartbeat_callback:
             heartbeat_callback()
 
-        # Check intercepted URL or trigger click
+        # Check if URL was captured
         try:
-            driver.execute_script(js_click)
-            attr_val = driver.execute_script("return document.body.getAttribute('data-direct-url');")
-            if attr_val and "dl.fuckingfast.co" in attr_val:
-                return attr_val
+            captured = driver.execute_script("return window.directDlUrl || document.body.getAttribute('data-direct-url');")
+            if captured and "dl.fuckingfast.co" in captured:
+                return captured
         except Exception:
             pass
 
-        # Fallback 1: Current browser navigation URL
+        # Trigger download button if token is ready or button is unlocked
+        try:
+            driver.execute_script("""
+                let b = document.querySelector('a[hx-post]');
+                if (b && (window.turnstileToken || window.dlCleared || (b.style && b.style.opacity !== '0.5'))) {
+                    b.click();
+                }
+            """)
+        except Exception:
+            pass
+
+        # Fallback 1: Current navigation URL
         try:
             if "dl.fuckingfast.co" in driver.current_url:
                 return driver.current_url
         except Exception:
             pass
             
-        # Fallback 2: Search page source
+        # Fallback 2: Page source regex
         try:
             src = driver.page_source
             match = re.search(r'https?://dl\.fuckingfast\.co/[^\s\'"<>]+', src)
